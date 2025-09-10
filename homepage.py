@@ -1,8 +1,18 @@
 import flet as ft
 import random
+import requests
+import threading
 from boton import boton
 
 def homepage(page: ft.Page):
+    # Iniciar servidor en hilo separado
+    def start_server():
+        import servidor
+        servidor.app.run(host="127.0.0.1", port=5000, debug=False)
+    
+    server_thread = threading.Thread(target=start_server, daemon=True)
+    server_thread.start()
+    
     # Generar nombre de usuario aleatorio
     nombres = ["Usuario", "Player", "Gamer", "Controller"]
     numero = random.randint(1000, 9999)
@@ -11,17 +21,10 @@ def homepage(page: ft.Page):
     nombre = nombre_usuario.split(" #")[0]
     numero = nombre_usuario.split(" #")[1]
 
-    def show_devices(e):
-        main_content_container.offset = ft.Offset(-1, 0)
-        device_list_container.offset = ft.Offset(0, 0)
-        device_list.visible = True
-        page.update()
-
     # Contenedor principal que se animará
-    main_content = ft.Column(
+    main_column = ft.Column(
         [
-            ft.Container(height=100),  # Espaciador vertical
-            # Nombre de usuario en la parte superior
+            ft.Container(height=100),
             ft.Row(
                 [
                     ft.Text(
@@ -39,7 +42,6 @@ def homepage(page: ft.Page):
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            # Imagen placeholder en el centro
             ft.Container(
                 content=ft.Icon(
                     ft.Icons.PHONE_ANDROID,
@@ -52,44 +54,74 @@ def homepage(page: ft.Page):
                 border_radius=20,
                 alignment=ft.alignment.center,
             ),
-            # Botón ligeramente abajo de la imagen
-            boton(page, on_click=show_devices),
         ],
         alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         spacing=30,
     )
+    main_content = ft.Container(
+        content=main_column,
+        width=400,
+        offset=ft.Offset(0, 0),
+        animate_offset=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+    )
 
     # Lista de dispositivos (inicialmente oculta)
-    device_list = ft.Column(
-        [
-            ft.Text("Dispositivos Disponibles", size=20, weight=ft.FontWeight.BOLD),
-            # Aquí se agregarán los dispositivos encontrados
-        ],
-        alignment=ft.MainAxisAlignment.CENTER,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=10,
-        visible=False,  # Oculto por defecto
+    device_column = ft.Column([
+        ft.Text("Dispositivos Disponibles", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+    ])
+    device_list = ft.Container(
+        content=device_column,
+        width=400,
+        offset=ft.Offset(1, 0),
+        animate_offset=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
     )
 
-    main_content_container = ft.Container(
+    def show_devices(e):
+        # Animar el deslizamiento
+        main_content.offset = ft.Offset(-1, 0)
+        device_list.offset = ft.Offset(0, 0)
+        page.update()
+        
+        # Buscar dispositivos en el servidor
+        try:
+            response = requests.get("http://127.0.0.1:5000/dispositivos", timeout=5)
+            if response.status_code == 200:
+                dispositivos = response.json()
+                # Limpiar lista anterior
+                device_column.controls = [
+                    ft.Text("Dispositivos Disponibles", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                ]
+                
+                # Agregar dispositivos a la lista
+                for dispositivo in dispositivos:
+                    device_card = ft.Container(
+                        content=ft.Column([
+                            ft.Text(dispositivo["nombre"], size=16, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                            ft.Text(f"IP: {dispositivo['ip']}", size=12, color=ft.Colors.GREY_400),
+                        ]),
+                        bgcolor=ft.Colors.GREY_800,
+                        border_radius=10,
+                        padding=15,
+                        margin=ft.margin.only(top=10),
+                    )
+                    device_column.controls.append(device_card)
+                
+                page.update()
+                page.update()
+        except requests.exceptions.RequestException as e:
+            device_column.controls.append(
+                ft.Text("Error: No se pudo conectar al servidor", color=ft.Colors.RED)
+            )
+            page.update()
+            
+    # Agregar el botón al contenido principal
+    # main_column is a Column, so we append to its controls
+    main_column.controls.append(boton(page, on_click=show_devices))
+   
+    
+    # Layout principal
+    return ft.Row([
         main_content,
-        expand=True,
-        offset=ft.Offset(0, 0),
-        animate_offset=ft.Animation(1000, ft.AnimationCurve.EASE_OUT),
-    )
-    device_list_container = ft.Container(
         device_list,
-        expand=True,
-        offset=ft.Offset(1, 0),  # Empieza fuera de la pantalla
-        animate_offset=ft.Animation(1000, ft.AnimationCurve.EASE_OUT),
-    )
-
-    # Contenedor de la fila principal
-    return ft.Row(
-        [
-            main_content_container,
-            device_list_container,
-        ],
-        vertical_alignment=ft.CrossAxisAlignment.START,
-    )
+    ])
