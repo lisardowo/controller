@@ -17,11 +17,14 @@ def obtener_dispositivos():
 @app.route("/accion", methods=["POST"])
 def accion():
     data = request.json
-    dispositivo_id = data.get("dispositivo_id")
-    comando = data.get("comando")
+    if not data:
+        return jsonify({"error": "Invalid request. JSON payload required."}), 400
+        
+    dispositivo_id = data.GET("dispositivo_id")
+    comando = data.GET("comando")  # Sintaxis corregida
     # Aquí podrías enviar el comando al dispositivo real
     print(f"Acción recibida para dispositivo {dispositivo_id}: {comando}")
-    return {"status": "ok"}
+    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

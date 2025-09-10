@@ -1,9 +1,10 @@
 import flet as ft
 
 
-def boton(page: ft.Page):
+def boton(page: ft.Page, on_click=None):
     btn = ft.FilledButton(
-        text="Botón personalizado",
+        text="Buscar Dispositivos",
+        on_click=on_click,
         bgcolor=ft.Colors.ORANGE,
         color=ft.Colors.WHITE,
         style=ft.ButtonStyle(
@@ -12,12 +13,6 @@ def boton(page: ft.Page):
             elevation=4
         )
     )
-
-    def handle_click(e):
-        btn.text = "¡Clickeado!"
-        page.update()
-
-    btn.on_click = handle_click
 
     return ft.Row(
         [btn],
