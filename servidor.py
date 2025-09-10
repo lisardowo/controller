@@ -25,6 +25,18 @@ def obtener_dispositivos_disponibles():
     # Devolver dispositivos disponibles (no conectados aún)
     return jsonify(list(dispositivos_disponibles.values()))
 
+@app.route("/obtener_ip_cliente", methods=["GET"])
+def obtener_ip_cliente():
+    """Endpoint para que el cliente móvil obtenga su IP real"""
+    # Obtener la IP del cliente desde la request
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.environ.get('REMOTE_ADDR') or 'unknown'
+    
+    # Si hay múltiples IPs (proxies), tomar la primera
+    if ',' in client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    
+    return jsonify({"ip": client_ip})
+
 @app.route("/publicar", methods=["POST"])
 def publicar_dispositivo():
     """Endpoint para que dispositivos móviles publiquen su disponibilidad"""

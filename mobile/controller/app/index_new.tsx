@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 export default function HomeScreen() {
   const [username, setUsername] = useState('');
   const [userNumber, setUserNumber] = useState('');
-  const [deviceIp, setDeviceIp] = useState<string>('192.168.1.100'); // IP por defecto, se actualizará dinámicamente
   const [serverIp, setServerIp] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -20,33 +19,6 @@ export default function HomeScreen() {
     
     setUsername(randomName);
     setUserNumber(`#${number}`);
-  }, []);
-
-  // Función para obtener la IP del dispositivo dinámicamente
-  const getDeviceIp = useCallback(async (serverIp: string): Promise<string> => {
-    try {
-      // Hacer una petición al servidor para que nos diga nuestra IP
-      const response = await fetch(`http://${serverIp}:5000/obtener_ip_cliente`, {
-        method: 'GET',
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.ip) {
-          setDeviceIp(data.ip);
-          return data.ip;
-        }
-      }
-    } catch (error) {
-      console.log('Error obteniendo IP del dispositivo:', error);
-    }
-    
-    // Fallback: generar una IP basada en la red del servidor
-    const serverSegments = serverIp.split('.');
-    serverSegments[3] = String(Math.floor(Math.random() * 100) + 100); // IP entre .100 y .199
-    const fallbackIp = serverSegments.join('.');
-    setDeviceIp(fallbackIp);
-    return fallbackIp;
   }, []);
 
   // Función para verificar si una IP tiene el servidor
@@ -76,14 +48,14 @@ export default function HomeScreen() {
     setStatusMessage('Escaneando red local...');
     
     // Primero probar la IP conocida
-    let foundIp = await checkServer('172.17.54.174');
+    let foundIp = await checkServer('172.17.17.207');
     if (foundIp) return foundIp;
 
     // Luego escanear red local común
     const baseIps = ['192.168.1', '192.168.0', '10.0.0'];
     
     for (const baseIp of baseIps) {
-      const promises = [];
+      const promises: Promise<string | null>[] = [];
       for (let i = 1; i <= 20; i++) { // Escanear solo primeras 20 IPs
         const ip = `${baseIp}.${i}`;
         promises.push(checkServer(ip));
@@ -103,9 +75,6 @@ export default function HomeScreen() {
   // Función para publicar disponibilidad en el servidor
   const publishDevice = useCallback(async (targetIp: string) => {
     try {
-      // Obtener la IP dinámica del dispositivo
-      const currentDeviceIp = await getDeviceIp(targetIp);
-      
       const response = await fetch(`http://${targetIp}:5000/publicar`, {
         method: 'POST',
         headers: {
@@ -113,7 +82,7 @@ export default function HomeScreen() {
         },
         body: JSON.stringify({
           nombre: `${username} ${userNumber}`,
-          ip: currentDeviceIp, // Usar IP dinámica
+          ip: '192.168.1.100', // IP simulada del teléfono
         }),
       });
 
@@ -126,7 +95,7 @@ export default function HomeScreen() {
       console.log('Error publicando dispositivo:', error);
     }
     return false;
-  }, [username, userNumber, getDeviceIp]);
+  }, [username, userNumber]);
 
   // Función para responder a solicitud de conexión
   const respondToRequest = useCallback(async (targetIp: string, solicitudId: string, accept: boolean) => {
@@ -165,7 +134,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.log('Error respondiendo solicitud:', error);
     }
-  }, [router]); // Agregar router como dependencia
+  }, [router]);
 
   // Función para verificar solicitudes de conexión
   const checkConnectionRequests = useCallback(async (targetIp: string) => {
@@ -199,7 +168,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.log('Error verificando solicitudes:', error);
     }
-  }, [respondToRequest]); // Ahora incluir respondToRequest como dependencia
+  }, [respondToRequest]);
 
   // Efecto principal para manejar el flujo de conexión
   useEffect(() => {
@@ -260,12 +229,6 @@ export default function HomeScreen() {
         {statusMessage}
       </Text>
 
-      {deviceIp !== '192.168.1.100' && (
-        <Text style={styles.deviceIpText}>
-          IP del dispositivo: {deviceIp}
-        </Text>
-      )}
-
       {isConnected && (
         <TouchableOpacity style={styles.controllerButton} onPress={handleOpenController}>
           <Text style={styles.buttonText}>Abrir Controlador</Text>
@@ -317,12 +280,6 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     fontStyle: 'normal',
     fontWeight: 'bold',
-  },
-  deviceIpText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontStyle: 'italic',
   },
   controllerButton: {
     marginTop: 30,
