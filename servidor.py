@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import time
 import pyautogui
 import threading
+import socket
 
 app = Flask(__name__)
 
@@ -14,6 +15,30 @@ solicitudes_pendientes = {}
 
 # Configurar pyautogui
 # pyautogui.FAILSAFE = False  # Comentado para evitar error de tipo
+
+def get_local_ip() -> str:
+    """Obtiene la IP local (LAN) de esta máquina."""
+    ip = "127.0.0.1"
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # No necesita ser accesible, sólo fuerza a elegir la interfaz de salida
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        pass
+    finally:
+        try:
+            if s:
+                s.close()
+        except Exception:
+            pass
+    return ip
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Salud del servidor y su IP LAN detectada."""
+    return jsonify({"status": "ok", "server_ip": get_local_ip()}), 200
 
 @app.route("/dispositivos", methods=["GET"])
 def obtener_dispositivos():

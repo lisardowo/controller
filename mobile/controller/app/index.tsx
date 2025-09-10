@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as Network from 'expo-network';
 
 export default function HomeScreen() {
   const [username, setUsername] = useState('');
   const [userNumber, setUserNumber] = useState('');
-  const [deviceIp, setDeviceIp] = useState<string>('192.168.1.100'); // IP por defecto, se actualizará dinámicamente
+  const [deviceIp, setDeviceIp] = useState<string>(''); // IP dinámica del dispositivo
   const [serverIp, setServerIp] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -17,23 +18,8 @@ export default function HomeScreen() {
     setIsPublished(false);
     setIsConnected(false);
     setServerIp(null);
-    setDeviceIp('192.168.1.100');
+    setDeviceIp('');
     setStatusMessage('Buscando servidor...');
-    
-    // Si hay un servidor conocido, notificarle que nos reiniciamos
-    const knownServerIp = '172.17.54.174';
-    try {
-      await fetch(`http://${knownServerIp}:5000/reiniciar_dispositivo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ip: '192.168.1.100', // IP fija para evitar dependencias circulares
-          nombre: 'Mobile Controller'
-        }),
-      });
-    } catch (error) {
-      console.log('Error notificando reinicio:', error);
-    }
   }, []); // Sin dependencias para evitar bucles infinitos
 
   // Efecto para generar el nombre de usuario al cargar
@@ -51,28 +37,14 @@ export default function HomeScreen() {
   }, []); // Solo ejecutar una vez al montar el componente (intencional para evitar bucles)
 
   // Función para obtener la IP del dispositivo dinámicamente
-  const getDeviceIp = useCallback(async (serverIp: string): Promise<string> => {
+  const getDeviceIp = useCallback(async (): Promise<string> => {
     try {
-      // Hacer una petición al servidor para que nos diga nuestra IP
-      const response = await fetch(`http://${serverIp}:5000/obtener_ip_cliente`, {
-        method: 'GET',
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.ip) {
-          return data.ip;
-        }
-      }
+      const ip = await Network.getIpAddressAsync();
+      return ip || '';
     } catch (error) {
-      console.log('Error obteniendo IP del dispositivo:', error);
+      console.log('No se pudo obtener la IP del dispositivo', error);
+      return '';
     }
-    
-    // Fallback: generar una IP basada en la red del servidor
-    const serverSegments = serverIp.split('.');
-    serverSegments[3] = String(Math.floor(Math.random() * 100) + 100); // IP entre .100 y .199
-    const fallbackIp = serverSegments.join('.');
-    return fallbackIp;
   }, []); // Sin dependencias para evitar re-renders constantes
 
   // Función para verificar si una IP tiene el servidor
@@ -81,7 +53,7 @@ export default function HomeScreen() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1000);
 
-      const response = await fetch(`http://${ip}:5000/dispositivos_disponibles`, {
+      const response = await fetch(`http://${ip}:5000/health`, {
         method: 'GET',
         signal: controller.signal,
       });
@@ -100,37 +72,36 @@ export default function HomeScreen() {
   // Función para escanear IPs en la red local
   const scanForServer = useCallback(async () => {
     setStatusMessage('Escaneando red local...');
-    
-    // Primero probar la IP conocida
-    let foundIp = await checkServer('172.17.54.174');
+    // Intento especial para emulador Android (host PC)
+    let foundIp = await checkServer('10.0.2.2');
     if (foundIp) return foundIp;
 
-    // Luego escanear red local común
-    const baseIps = ['192.168.1', '192.168.0', '10.0.0'];
-    
-    for (const baseIp of baseIps) {
-      const promises = [];
-      for (let i = 1; i <= 20; i++) { // Escanear solo primeras 20 IPs
-        const ip = `${baseIp}.${i}`;
-        promises.push(checkServer(ip));
-      }
-
-      const results = await Promise.allSettled(promises);
-      
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) {
-          return result.value;
+    // Obtener IP del dispositivo para inferir subred
+    const myIp = await getDeviceIp();
+    if (myIp) setDeviceIp(myIp);
+    const parts = myIp?.split('.') || [];
+    if (parts.length === 4) {
+      const base = `${parts[0]}.${parts[1]}.${parts[2]}`;
+      const chunkSize = 25;
+      // Escanear /24 en bloques para evitar bloquear UI
+      for (let start = 1; start <= 254; start += chunkSize) {
+        const batch: Promise<string | null>[] = [];
+        for (let i = start; i < Math.min(start + chunkSize, 255); i++) {
+          batch.push(checkServer(`${base}.${i}`));
         }
+        const results = await Promise.all(batch);
+        const ok = results.find(Boolean);
+        if (ok) return ok as string;
       }
     }
     return null;
-  }, [checkServer]);
+  }, [checkServer, getDeviceIp]);
 
   // Función para publicar disponibilidad en el servidor
   const publishDevice = useCallback(async (targetIp: string) => {
     try {
       // Obtener la IP dinámica del dispositivo
-      const currentDeviceIp = await getDeviceIp(targetIp);
+      const currentDeviceIp = await getDeviceIp();
       
       // Actualizar el estado con la IP obtenida
       setDeviceIp(currentDeviceIp);
@@ -239,7 +210,7 @@ export default function HomeScreen() {
         setIsConnected(false);
         setIsPublished(false);
         setServerIp(null);
-        setDeviceIp('192.168.1.100');
+        setDeviceIp('');
         setStatusMessage('Buscando servidor...');
       }
     }, [isConnected])
@@ -304,7 +275,7 @@ export default function HomeScreen() {
         {statusMessage}
       </Text>
 
-      {deviceIp !== '192.168.1.100' && (
+  {!!deviceIp && (
         <Text style={styles.deviceIpText}>
           IP del dispositivo: {deviceIp}
         </Text>

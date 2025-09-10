@@ -7,7 +7,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function ControllerScreen() {
   const params = useLocalSearchParams();
-  const serverIp = params.serverIp as string;
+  const serverIp = (params.serverIp as string) || '';
   const router = useRouter();
 
   useEffect(() => {
@@ -17,8 +17,12 @@ export default function ControllerScreen() {
 
   // Función para enviar comandos al servidor
   const sendCommand = async (comando: string) => {
+    if (!serverIp) {
+      console.log('Sin serverIp: no se puede enviar comando');
+      return;
+    }
     try {
-      await fetch(`http://${serverIp || '172.17.17.207'}:5000/comando`, {
+      await fetch(`http://${serverIp}:5000/comando`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ comando }),
@@ -42,8 +46,12 @@ export default function ControllerScreen() {
           text: "Desconectar",
           onPress: async () => {
             try {
+              if (!serverIp) {
+                router.push('/');
+                return;
+              }
               // Enviar comando de desconexión al servidor
-              await fetch(`http://${serverIp || '172.17.54.174'}:5000/desconectar`, {
+              await fetch(`http://${serverIp}:5000/desconectar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -53,7 +61,7 @@ export default function ControllerScreen() {
               });
               
               // También enviar comando de reinicio para limpiar completamente
-              await fetch(`http://${serverIp || '172.17.54.174'}:5000/reiniciar_dispositivo`, {
+              await fetch(`http://${serverIp}:5000/reiniciar_dispositivo`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -194,10 +202,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: height * 0.8,
     marginHorizontal: 20,
+    paddingVertical: 20, // Agregar padding vertical
   },
   touchpad: {
     width: width * 0.5,
-    height: Math.max(height * 0.3, 120),
+    height: Math.max(height * 0.25, 100), // Reducir altura para dar más espacio a las flechas
     backgroundColor: '#666',
     borderRadius: 10,
     alignItems: 'center',
@@ -206,25 +215,27 @@ const styles = StyleSheet.create({
   arrowsContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: width * 0.4, // Limitar el ancho del contenedor
+    height: height * 0.35, // Limitar la altura del contenedor
   },
   middleArrows: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: width * 0.25,
-    marginVertical: 10,
+    width: Math.min(width * 0.2, 120), // Reducir ancho y agregar máximo
+    marginVertical: 8, // Reducir margen vertical
   },
   arrowButton: {
-    width: Math.min(width * 0.08, 60),
-    height: Math.min(width * 0.08, 60),
+    width: Math.min(width * 0.06, 45), // Reducir tamaño de botones
+    height: Math.min(width * 0.06, 45), // Reducir tamaño de botones
     backgroundColor: '#888',
-    borderRadius: 10,
+    borderRadius: 8, // Reducir border radius
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 5,
+    marginVertical: 3, // Reducir margen vertical
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16, // Reducir tamaño de fuente
     fontWeight: 'bold',
   },
 });
