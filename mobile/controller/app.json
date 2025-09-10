@@ -1,0 +1,47 @@
+{
+    "expo":  {
+                 "name":  "controller",
+                 "slug":  "controller",
+                 "version":  "1.0.0",
+                 "orientation":  "portrait",
+                 "scheme":  "controller",
+                 "userInterfaceStyle":  "automatic",
+                 "newArchEnabled":  true,
+                 "ios":  {
+                             "supportsTablet":  true
+                         },
+                 "android":  {
+                                "adaptiveIcon":  {
+                                                    "foregroundImage":  "./assets/images/Idle.png",
+                                                    "backgroundColor":  "#FFFFFF"
+                                                }
+                             },
+                 "web":  {
+                             "bundler":  "metro",
+                             "output":  "static",
+                             "favicon":  "./assets/images/Idle.png"
+                         },
+                 "plugins":  [
+                                 "expo-router",
+                                 [
+                                     "expo-splash-screen",
+                                     {
+                                         "image":  "./assets/images/Idle.png",
+                                         "imageWidth":  200,
+                                         "resizeMode":  "contain",
+                                         "backgroundColor":  "#ffffff"
+                                     }
+                                 ]
+                             ],
+                 "experiments":  {
+                                     "typedRoutes":  true
+                                 },
+                 "platforms":  [
+                                    "ios",
+                                    "android"
+                                ],
+                 "assetBundlePatterns":  [
+                                             "**/*"
+                                         ]
+             }
+}

@@ -132,32 +132,103 @@ def homepage(page: ft.Page):
         page.update()
         
         try:
-            response = requests.get("http://127.0.0.1:5000/dispositivos", timeout=5)
-            if response.status_code == 200:
-                dispositivos = response.json()
-                device_column.controls = [ft.Text("Dispositivos", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD)]
-                for dispositivo in dispositivos:
+            # Obtener dispositivos disponibles (no conectados)
+            response_available = requests.get("http://127.0.0.1:5000/dispositivos_disponibles", timeout=5)
+            device_column.controls = [ft.Text("Dispositivos", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD)]
+            
+            if response_available.status_code == 200:
+                dispositivos_disponibles = response_available.json()
+                
+                if dispositivos_disponibles:
                     device_column.controls.append(
-                        ft.Container(
-                            content=ft.Column([
-                                ft.Text(dispositivo["nombre"], weight=ft.FontWeight.BOLD),
-                                ft.Text(f"IP: {dispositivo['ip']}", size=12, color=ft.Colors.GREY_400),
-                            ]),
-                            bgcolor=ft.Colors.GREY_800,
-                            border_radius=10,
-                            padding=15,
-                            margin=ft.margin.only(top=10),
-                        )
+                        ft.Text("Dispositivos Disponibles:", size=16, color=ft.Colors.BLUE_400, weight=ft.FontWeight.BOLD)
                     )
-            else:
-                device_column.controls = [ft.Text("Error al buscar", color=ft.Colors.RED)]
-            page.update()
+                    
+                    for dispositivo in dispositivos_disponibles:
+                        def make_request_handler(ip):
+                            def request_connection(e):
+                                try:
+                                    req_response = requests.post(
+                                        "http://127.0.0.1:5000/solicitar_conexion", 
+                                        json={"ip_destino": ip},
+                                        timeout=5
+                                    )
+                                    if req_response.status_code == 200:
+                                        # Mostrar mensaje de éxito
+                                        snack = ft.SnackBar(
+                                            content=ft.Text(f"Solicitud enviada a {ip}"),
+                                            bgcolor=ft.Colors.BLUE_400
+                                        )
+                                        page.overlay.append(snack)
+                                        snack.open = True
+                                        page.update()
+                                except Exception as ex:
+                                    snack = ft.SnackBar(
+                                        content=ft.Text(f"Error: {str(ex)}"),
+                                        bgcolor=ft.Colors.RED_400
+                                    )
+                                    page.overlay.append(snack)
+                                    snack.open = True
+                                    page.update()
+                            return request_connection
+                        
+                        device_column.controls.append(
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Text(dispositivo["nombre"], weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                    ft.Text(f"IP: {dispositivo['ip']}", size=12, color=ft.Colors.GREY_400),
+                                    ft.ElevatedButton(
+                                        "Solicitar Conexión",
+                                        bgcolor=ft.Colors.BLUE_400,
+                                        color=ft.Colors.WHITE,
+                                        on_click=make_request_handler(dispositivo['ip'])
+                                    )
+                                ]),
+                                bgcolor=ft.Colors.GREY_800,
+                                border_radius=10,
+                                padding=15,
+                                margin=ft.margin.only(top=10),
+                            )
+                        )
+            
+            # Obtener dispositivos conectados
+            response_connected = requests.get("http://127.0.0.1:5000/dispositivos", timeout=5)
+            if response_connected.status_code == 200:
+                dispositivos_conectados = response_connected.json()
+                
+                if dispositivos_conectados:
+                    device_column.controls.append(ft.Container(height=20))  # Espaciador
+                    device_column.controls.append(
+                        ft.Text("Dispositivos Conectados:", size=16, color=ft.Colors.GREEN_400, weight=ft.FontWeight.BOLD)
+                    )
+                    
+                    for dispositivo in dispositivos_conectados:
+                        device_column.controls.append(
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Text(dispositivo["nombre"], weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                    ft.Text(f"IP: {dispositivo['ip']}", size=12, color=ft.Colors.GREY_400),
+                                    ft.Text("✅ Conectado", size=14, color=ft.Colors.GREEN_400)
+                                ]),
+                                bgcolor=ft.Colors.GREEN_900,
+                                border_radius=10,
+                                padding=15,
+                                margin=ft.margin.only(top=10),
+                            )
+                        )
+            
+            if not dispositivos_disponibles and not dispositivos_conectados:
+                device_column.controls.append(
+                    ft.Text("No hay dispositivos disponibles", color=ft.Colors.GREY_400, size=14)
+                )
+                
         except requests.exceptions.RequestException:
             device_column.controls = [
                 ft.Text("Error de Conexión", color=ft.Colors.RED, weight=ft.FontWeight.BOLD),
                 ft.Text("No se pudo conectar al servidor."),
             ]
-            page.update()
+        
+        page.update()
             
     # Agregar el botón a la columna principal
     main_column.controls.append(boton(page, on_click=show_devices))
