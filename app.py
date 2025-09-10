@@ -4,7 +4,7 @@ from homepage import homepage
 
 def main(page: ft.Page):
     page.title = "Controller"
-    page.bgcolor = "6DD5C8"
+    page.bgcolor = "#1c3036"
     page.add(
         homepage(page)
        
