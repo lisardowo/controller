@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Text, Alert } from 'react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
 
 export default function ControllerScreen() {
   const params = useLocalSearchParams();
   const serverIp = params.serverIp as string;
+  const router = useRouter();
 
   useEffect(() => {
     // Forzar orientación horizontal al montar
@@ -27,8 +28,61 @@ export default function ControllerScreen() {
     }
   };
 
+  // Función para desconectar y volver a la pantalla principal
+  const disconnect = async () => {
+    Alert.alert(
+      "Desconectar",
+      "¿Estás seguro que quieres desconectarte?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel"
+        },
+        {
+          text: "Desconectar",
+          onPress: async () => {
+            try {
+              // Enviar comando de desconexión al servidor
+              await fetch(`http://${serverIp || '172.17.54.174'}:5000/desconectar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  ip: 'mobile_device', // Identificador del dispositivo móvil
+                  nombre: 'Mobile Controller'
+                }),
+              });
+              
+              // También enviar comando de reinicio para limpiar completamente
+              await fetch(`http://${serverIp || '172.17.54.174'}:5000/reiniciar_dispositivo`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  ip: 'mobile_device',
+                  nombre: 'Mobile Controller'
+                }),
+              });
+            } catch (error) {
+              console.log('Error al desconectar:', error);
+            } finally {
+              // Volver a la pantalla principal independientemente del resultado
+              router.push('/');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
+      {/* Botón de desconexión en la esquina superior derecha */}
+      <TouchableOpacity
+        style={styles.disconnectButton}
+        onPress={disconnect}
+      >
+        <Text style={styles.disconnectText}>×</Text>
+      </TouchableOpacity>
+
       {/* Rectángulo izquierdo - Click izquierdo */}
       <TouchableOpacity
         style={styles.sideButtonLeft}
@@ -99,6 +153,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 20,
+    position: 'relative',
+  },
+  disconnectButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    backgroundColor: '#FF4444',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  disconnectText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   sideButtonLeft: {
     width: Math.min(width * 0.15, 80),

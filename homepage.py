@@ -13,6 +13,23 @@ def homepage(page: ft.Page):
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
     
+    # --- Limpiar dispositivos al iniciar la aplicación ---
+    def limpiar_dispositivos_al_iniciar():
+        try:
+            requests.post("http://127.0.0.1:5000/limpiar_dispositivos", timeout=5)
+            print("Dispositivos limpiados al iniciar la aplicación")
+        except Exception as e:
+            print(f"Error limpiando dispositivos al iniciar: {e}")
+    
+    # Limpiar después de un breve delay para asegurar que el servidor esté listo
+    import time
+    def delayed_cleanup():
+        time.sleep(2)  # Esperar 2 segundos para que el servidor inicie
+        limpiar_dispositivos_al_iniciar()
+    
+    cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
+    cleanup_thread.start()
+    
     # --- Generación de Nombre de Usuario ---
     nombres = ["Usuario", "Player", "Gamer", "Controller"]
     numero = random.randint(1000, 9999)
@@ -126,6 +143,29 @@ def homepage(page: ft.Page):
     )
 
     # --- Lógica de Animación y Búsqueda ---
+    def limpiar_todos_dispositivos(e):
+        """Función para limpiar todos los dispositivos manualmente"""
+        try:
+            response = requests.post("http://127.0.0.1:5000/limpiar_dispositivos", timeout=5)
+            if response.status_code == 200:
+                snack = ft.SnackBar(
+                    content=ft.Text("Todos los dispositivos han sido limpiados"),
+                    bgcolor=ft.Colors.GREEN_400
+                )
+                page.overlay.append(snack)
+                snack.open = True
+                page.update()
+                # Refrescar la lista
+                show_devices(None)
+        except Exception as ex:
+            snack = ft.SnackBar(
+                content=ft.Text(f"Error limpiando dispositivos: {str(ex)}"),
+                bgcolor=ft.Colors.RED_400
+            )
+            page.overlay.append(snack)
+            snack.open = True
+            page.update()
+
     def show_devices(e):
         main_view.offset = ft.Offset(-1, 0)
         secondary_view.offset = ft.Offset(0, 0)
@@ -134,7 +174,16 @@ def homepage(page: ft.Page):
         try:
             # Obtener dispositivos disponibles (no conectados)
             response_available = requests.get("http://127.0.0.1:5000/dispositivos_disponibles", timeout=5)
-            device_column.controls = [ft.Text("Dispositivos", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD)]
+            device_column.controls = [
+                ft.Text("Dispositivos", size=20, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                ft.ElevatedButton(
+                    "🗑️ Limpiar Todos los Dispositivos",
+                    bgcolor=ft.Colors.RED_600,
+                    color=ft.Colors.WHITE,
+                    on_click=limpiar_todos_dispositivos
+                ),
+                ft.Container(height=10)  # Espaciador
+            ]
             
             if response_available.status_code == 200:
                 dispositivos_disponibles = response_available.json()
@@ -203,12 +252,47 @@ def homepage(page: ft.Page):
                     )
                     
                     for dispositivo in dispositivos_conectados:
+                        def make_disconnect_handler(ip, nombre):
+                            def disconnect_device(e):
+                                try:
+                                    disc_response = requests.post(
+                                        "http://127.0.0.1:5000/desconectar", 
+                                        json={"ip": ip, "nombre": nombre},
+                                        timeout=5
+                                    )
+                                    if disc_response.status_code == 200:
+                                        # Mostrar mensaje de éxito y refrescar la lista
+                                        snack = ft.SnackBar(
+                                            content=ft.Text(f"Dispositivo {nombre} desconectado"),
+                                            bgcolor=ft.Colors.ORANGE_400
+                                        )
+                                        page.overlay.append(snack)
+                                        snack.open = True
+                                        page.update()
+                                        # Refrescar la lista de dispositivos
+                                        show_devices(None)
+                                except Exception as ex:
+                                    snack = ft.SnackBar(
+                                        content=ft.Text(f"Error al desconectar: {str(ex)}"),
+                                        bgcolor=ft.Colors.RED_400
+                                    )
+                                    page.overlay.append(snack)
+                                    snack.open = True
+                                    page.update()
+                            return disconnect_device
+                        
                         device_column.controls.append(
                             ft.Container(
                                 content=ft.Column([
                                     ft.Text(dispositivo["nombre"], weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
                                     ft.Text(f"IP: {dispositivo['ip']}", size=12, color=ft.Colors.GREY_400),
-                                    ft.Text("✅ Conectado", size=14, color=ft.Colors.GREEN_400)
+                                    ft.Text("✅ Conectado", size=14, color=ft.Colors.GREEN_400),
+                                    ft.ElevatedButton(
+                                        "Desconectar",
+                                        bgcolor=ft.Colors.RED_400,
+                                        color=ft.Colors.WHITE,
+                                        on_click=make_disconnect_handler(dispositivo['ip'], dispositivo['nombre'])
+                                    )
                                 ]),
                                 bgcolor=ft.Colors.GREEN_900,
                                 border_radius=10,

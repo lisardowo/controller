@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function HomeScreen() {
   const [username, setUsername] = useState('');
@@ -12,6 +12,30 @@ export default function HomeScreen() {
   const [statusMessage, setStatusMessage] = useState('Buscando servidor...');
   const router = useRouter();
 
+  // Función para reiniciar el estado del dispositivo
+  const resetDeviceState = useCallback(async () => {
+    setIsPublished(false);
+    setIsConnected(false);
+    setServerIp(null);
+    setDeviceIp('192.168.1.100');
+    setStatusMessage('Buscando servidor...');
+    
+    // Si hay un servidor conocido, notificarle que nos reiniciamos
+    const knownServerIp = '172.17.54.174';
+    try {
+      await fetch(`http://${knownServerIp}:5000/reiniciar_dispositivo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip: '192.168.1.100', // IP fija para evitar dependencias circulares
+          nombre: 'Mobile Controller'
+        }),
+      });
+    } catch (error) {
+      console.log('Error notificando reinicio:', error);
+    }
+  }, []); // Sin dependencias para evitar bucles infinitos
+
   // Efecto para generar el nombre de usuario al cargar
   useEffect(() => {
     const names = ["Usuario", "Player", "Gamer", "Controller"];
@@ -20,7 +44,11 @@ export default function HomeScreen() {
     
     setUsername(randomName);
     setUserNumber(`#${number}`);
-  }, []);
+    
+    // Reiniciar estado al cargar la aplicación (solo una vez)
+    resetDeviceState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo ejecutar una vez al montar el componente (intencional para evitar bucles)
 
   // Función para obtener la IP del dispositivo dinámicamente
   const getDeviceIp = useCallback(async (serverIp: string): Promise<string> => {
@@ -33,7 +61,6 @@ export default function HomeScreen() {
       if (response.ok) {
         const data = await response.json();
         if (data.ip) {
-          setDeviceIp(data.ip);
           return data.ip;
         }
       }
@@ -45,9 +72,8 @@ export default function HomeScreen() {
     const serverSegments = serverIp.split('.');
     serverSegments[3] = String(Math.floor(Math.random() * 100) + 100); // IP entre .100 y .199
     const fallbackIp = serverSegments.join('.');
-    setDeviceIp(fallbackIp);
     return fallbackIp;
-  }, []);
+  }, []); // Sin dependencias para evitar re-renders constantes
 
   // Función para verificar si una IP tiene el servidor
   const checkServer = useCallback(async (ip: string): Promise<string | null> => {
@@ -105,6 +131,9 @@ export default function HomeScreen() {
     try {
       // Obtener la IP dinámica del dispositivo
       const currentDeviceIp = await getDeviceIp(targetIp);
+      
+      // Actualizar el estado con la IP obtenida
+      setDeviceIp(currentDeviceIp);
       
       const response = await fetch(`http://${targetIp}:5000/publicar`, {
         method: 'POST',
@@ -200,6 +229,21 @@ export default function HomeScreen() {
       console.log('Error verificando solicitudes:', error);
     }
   }, [respondToRequest]); // Ahora incluir respondToRequest como dependencia
+
+  // Efecto para detectar cuando regresamos desde el controlador (posible desconexión)
+  useFocusEffect(
+    useCallback(() => {
+      // Si estábamos conectados y regresamos a esta pantalla, resetear completamente
+      if (isConnected) {
+        // Resetear directamente sin usar la función para evitar dependencias
+        setIsConnected(false);
+        setIsPublished(false);
+        setServerIp(null);
+        setDeviceIp('192.168.1.100');
+        setStatusMessage('Buscando servidor...');
+      }
+    }, [isConnected])
+  );
 
   // Efecto principal para manejar el flujo de conexión
   useEffect(() => {

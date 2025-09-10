@@ -230,5 +230,84 @@ def accion():
     print(f"Acción recibida para dispositivo {dispositivo_id}: {comando}")
     return jsonify({"status": "ok"})
 
+@app.route("/desconectar", methods=["POST"])
+def desconectar_dispositivo():
+    """Endpoint para desconectar un dispositivo y liberarlo para nueva conexión"""
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid request. JSON payload required."}), 400
+    
+    dispositivo_ip = data.get("ip")
+    dispositivo_nombre = data.get("nombre")
+    
+    if not dispositivo_ip:
+        return jsonify({"error": "IP del dispositivo requerida."}), 400
+    
+    # Buscar el dispositivo en conectados y moverlo de vuelta a disponibles
+    dispositivo_encontrado = None
+    for device_id, device in list(dispositivos_conectados.items()):
+        if device.get("ip") == dispositivo_ip or device.get("nombre") == dispositivo_nombre:
+            dispositivo_encontrado = device
+            del dispositivos_conectados[device_id]
+            break
+    
+    if dispositivo_encontrado:
+        # Mover el dispositivo de vuelta a disponibles con nuevo timestamp
+        nuevo_id = f"device_{len(dispositivos_disponibles) + 1}_{int(time.time())}"
+        dispositivos_disponibles[nuevo_id] = {
+            "id": nuevo_id,
+            "nombre": dispositivo_encontrado["nombre"],
+            "ip": dispositivo_encontrado["ip"],
+            "timestamp": time.time()
+        }
+        
+        print(f"Dispositivo desconectado: {dispositivo_encontrado['nombre']} ({dispositivo_encontrado['ip']})")
+        return jsonify({"status": "ok", "message": "Dispositivo desconectado exitosamente"})
+    else:
+        # Si no se encuentra en conectados, asegurar que esté en disponibles
+        print(f"Dispositivo no encontrado en conectados, liberando IP: {dispositivo_ip}")
+        return jsonify({"status": "ok", "message": "Dispositivo liberado"})
+
+@app.route("/limpiar_dispositivos", methods=["POST"])
+def limpiar_dispositivos():
+    """Endpoint para limpiar todos los dispositivos y reiniciar el estado"""
+    global dispositivos_disponibles, dispositivos_conectados, solicitudes_pendientes
+    
+    dispositivos_disponibles.clear()
+    dispositivos_conectados.clear()
+    solicitudes_pendientes.clear()
+    
+    print("Todos los dispositivos han sido limpiados del servidor")
+    return jsonify({"status": "ok", "message": "Dispositivos limpiados exitosamente"})
+
+@app.route("/reiniciar_dispositivo", methods=["POST"])
+def reiniciar_dispositivo():
+    """Endpoint para que un dispositivo se reinicie y vuelva al estado inicial"""
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid request. JSON payload required."}), 400
+    
+    dispositivo_ip = data.get("ip")
+    dispositivo_nombre = data.get("nombre")
+    
+    # Remover de todas las listas
+    for device_id, device in list(dispositivos_conectados.items()):
+        if device.get("ip") == dispositivo_ip or device.get("nombre") == dispositivo_nombre:
+            del dispositivos_conectados[device_id]
+            break
+    
+    for device_id, device in list(dispositivos_disponibles.items()):
+        if device.get("ip") == dispositivo_ip or device.get("nombre") == dispositivo_nombre:
+            del dispositivos_disponibles[device_id]
+            break
+    
+    # Limpiar solicitudes pendientes relacionadas
+    for solicitud_id, solicitud in list(solicitudes_pendientes.items()):
+        if solicitud.get("ip_destino") == dispositivo_ip:
+            del solicitudes_pendientes[solicitud_id]
+    
+    print(f"Dispositivo reiniciado: {dispositivo_nombre} ({dispositivo_ip})")
+    return jsonify({"status": "ok", "message": "Dispositivo reiniciado exitosamente"})
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
